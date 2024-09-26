@@ -296,7 +296,7 @@ router.post('/guest/sign-in', async (req, res, next) => {
 
     // 주문을 한 비회원인지 체크하는 코드
     const foundGuest = await Guest.findOne({
-      orderNumber: foundOrder._id,
+      orderNumber: foundOrder.number,
     }).lean();
 
     const isPassword = await bcrypt.compare(password, foundGuest.password);
