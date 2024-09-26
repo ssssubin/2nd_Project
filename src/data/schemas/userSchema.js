@@ -32,6 +32,10 @@ const userSchema = new Schema(
       required: true,
       default: true,
     },
+    updateLock: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     versionKey: false,
