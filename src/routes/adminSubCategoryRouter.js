@@ -1,5 +1,5 @@
 const express = require('express');
-
+const mongoose = require('mongoose');
 const router = express.Router();
 const { SubCategory, Category, Product } = require('../data');
 
@@ -133,15 +133,17 @@ router.put('/:subCategoryNumber', async (req, res, next) => {
 
 // 소분류 카테고리 삭제
 router.delete('/:subCategoryNumber', async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { subCategoryNumber } = req.params; // URL 파라미터에서 subCategoryNumber 추출
-
+    const intSubCategoryNumber = Number(subCategoryNumber);
     // 삭제하려는 소분류 카테고리가 DB에 존재하지 않는 경우
     const foundSubCategory = await SubCategory.findOne({
-      number: Number(subCategoryNumber),
-    }).lean();
+      number: intSubCategoryNumber,
+    }).session(session);
     if (
-      !Number.isInteger(Number(subCategoryNumber)) ||
+      !Number.isInteger(intSubCategoryNumber) ||
       subCategoryNumber.length !== 3 ||
       foundSubCategory === null ||
       foundSubCategory === undefined
@@ -154,7 +156,7 @@ router.delete('/:subCategoryNumber', async (req, res, next) => {
 
     // 소분류 카테고리에 속하는 상품들
     const foundProduct = await Product.find({
-      subCategoryNumber: Number(subCategoryNumber),
+      subCategoryNumber: intSubCategoryNumber,
     }).lean();
 
     // foundProduct에 속하는 모든 이미지 파일 저장소에서 삭제
@@ -165,18 +167,18 @@ router.delete('/:subCategoryNumber', async (req, res, next) => {
     // subCategoryNumber에 해당하는 소분류 카테고리를 삭제
     await Promise.all([
       // 소분류 카테고리에 해당하는 상품 삭제
-      Product.deleteMany({ subCategoryNumber: foundSubCategory.number }),
+      Product.deleteMany({ subCategoryNumber: foundSubCategory.number }).session(session),
       // 소분류 카테고리 삭제
-      SubCategory.deleteOne({ number: foundSubCategory.number }),
+      SubCategory.deleteOne({ number: foundSubCategory.number }).session(session),
     ]);
-
-    // 소분류 카테고리에 해당하는 상품 삭제
-
-    await Product.deleteMany({ subCategoryNumber: Number(subCategoryNumber) });
-
+    await session.commitTransaction();
     return res.status(204).json();
   } catch (e) {
+    console.error(e);
+    await session.abortTransaction();
     next(e);
+  } finally {
+    session.endSession();
   }
 });
 

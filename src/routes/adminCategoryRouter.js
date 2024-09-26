@@ -1,5 +1,5 @@
 const express = require('express');
-
+const mongoose = require('mongoose');
 const router = express.Router();
 const { Category, SubCategory, Product } = require('../data');
 
@@ -111,13 +111,15 @@ router.put('/:categoryNumber', async (req, res, next) => {
 
 // 대분류 카테고리 삭제
 router.delete('/:categoryNumber', async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { categoryNumber } = req.params; // URL 파라미터에서 categoryNumber 추출
-
-    const foundCategory = await Category.findOne({ number: Number(categoryNumber) }).lean();
+    const intCategoryNumber = Number(categoryNumber);
+    const foundCategory = await Category.findOne({ number: intCategoryNumber }).session(session);
     // categoryNumber가 1자리 숫자가 아니거나 카테고리 db에 존재하지 않는 경우
     if (
-      !Number.isInteger(Number(categoryNumber)) ||
+      !Number.isInteger(intCategoryNumber) ||
       categoryNumber.length > 2 ||
       foundCategory === null ||
       foundCategory === undefined
@@ -128,7 +130,7 @@ router.delete('/:categoryNumber', async (req, res, next) => {
     }
 
     // 대분류 카테고리에 속하는 상품들
-    const foundProduct = await Product.find({ categoryNumber: Number(categoryNumber) }).lean();
+    const foundProduct = await Product.find({ categoryNumber: intCategoryNumber }).lean();
     // foundProduct에 속하는 모든 이미지 파일 저장소에서 삭제
     foundProduct.forEach((product) => {
       fs.unlinkSync('src/productImages/' + product.image);
@@ -136,16 +138,20 @@ router.delete('/:categoryNumber', async (req, res, next) => {
 
     await Promise.all([
       // 대분류 카테고리에 속하는 상품 삭제
-      Product.deleteMany({ categoryNumber: Number(categoryNumber) }),
+      Product.deleteMany({ categoryNumber: intCategoryNumber }).session(session),
       // 소분류 카테고리 삭제
-      SubCategory.deleteMany({ mainCategoryNumber: Number(categoryNumber) }),
+      SubCategory.deleteMany({ mainCategoryNumber: intCategoryNumber }).session(session),
       // 대분류 카테고리 삭제
-      Category.deleteOne({ number: Number(categoryNumber) }),
+      Category.deleteOne({ number: intCategoryNumber }).session(session),
     ]);
-
+    await session.commitTransaction();
     return res.status(204).json();
   } catch (e) {
+    console.error(e);
+    await session.abortTransaction();
     next(e);
+  } finally {
+    session.endSession();
   }
 });
 
