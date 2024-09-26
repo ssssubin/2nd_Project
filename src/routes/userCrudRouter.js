@@ -6,29 +6,10 @@ const bcrypt = require('bcrypt');
 
 const { User } = require('../data');
 
-// 토큰확인 함수
-const verifyToken = (token, secretKey) => {
-  try {
-    return jwt.verify(token, secretKey);
-  } catch (e) {
-    if (e.name === 'TokenExpiredError') {
-      const err = new Error('토큰이 만료되었습니다. 다시 로그인 해주세요.');
-      err.statusCode = 401;
-      throw err;
-    }
-    if (e.name === 'JsonWebTokenError') {
-      const err = new Error('유효하지 않거나 손상된 토큰입니다. 다시 로그인 해주세요.');
-      err.statusCode = 401;
-      throw err;
-    }
-    throw e; // 다른 예기치 않은 에러
-  }
-};
-
 // 사용자 정보 조회
 router.get('/', async (req, res, next) => {
   try {
-    const { adminCookies, tempCookies } = req.cookies;
+    const { adminCookies } = req.cookies;
 
     // 관리자인 경우
     if (adminCookies) {
@@ -36,16 +17,6 @@ router.get('/', async (req, res, next) => {
       err.statusCode = 403;
       return next(err);
     }
-
-    // 비밀번호 재확인 쿠키가 존재하지 않는 경우
-    if (!tempCookies) {
-      const err = new Error('비밀번호 재확인이 필요합니다.');
-      err.statusCode = 401;
-      return next(err);
-    }
-
-    // 비밀번호 재확인 토큰 확인
-    verifyToken(tempCookies, process.env.CONFIRM_JWT_SECRET_KEY);
 
     const user = await User.findById(res.locals.user._id).lean();
 
@@ -55,9 +26,6 @@ router.get('/', async (req, res, next) => {
       err.statusCode = 404;
       return next(err);
     }
-
-    // 비밀번호 재확인 쿠키 제거
-    res.clearCookie('tempCookies');
 
     // 4가지 user정보 반환(이름, 이메일, 주소, 전화번호)
     res.json({
@@ -99,6 +67,13 @@ router.put('/', async (req, res, next) => {
     }
 
     const user = await User.findById(res.locals.user._id).lean();
+
+    // 비밀번호 재확인 안 했을 경우
+    if (user.updateLock === true) {
+      const err = new Error('비밀번호를 재확인 해야 합니다.');
+      err.statusCode = 412;
+      return next(err);
+    }
 
     // 유저가 존재하지 않을 경우
     if (!user) {
@@ -165,6 +140,7 @@ router.put('/', async (req, res, next) => {
       password: hashPassword,
       phoneNumber,
       address: [postNumber, address, detailAddress],
+      updateLock: true,
     };
 
     // DB에 데이터 저장
