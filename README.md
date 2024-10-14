@@ -84,7 +84,8 @@
 
 - 비회원, 회원 모두 주문 조회 가능
 - 회원인 경우 비밀번호 재확인 후 회원 정보 조회/수정 및 회원 탈퇴 가능
-- 비밀번호 재확인 시 임시 토큰 쿠키에 담아 발급
+- 비밀번호 재확인 API는 updateLock 필드로 관리(default: true)
+   - 비밀번호 재확인 완료 시, true -> false로 변경
 
 <center><img src="./REAME_img/image-7.png" width="400" height="200"></center><br />
 
